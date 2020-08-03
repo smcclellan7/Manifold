@@ -1,0 +1,5 @@
+# AWS/sam
+/.aws-sam/
+
+# venv
+/venv/

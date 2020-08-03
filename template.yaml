@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A simple service that extracts a full name an zip code from a JSON and stores it in S3.
+Resources:
+  # TODO consider using more roles with narrower permissions.
+  RootRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Description: A single role with all permissions.
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+
+  NameAndZipBucket:
+    Type: AWS::S3::Bucket
+
+  # Grants the root role unrestricted access to the NameAndZipBucket
+  NameAndZipBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref NameAndZipBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Sid: 'AllowS3AccessToRootRole'
+            Action:
+              - 's3:*'
+            Effect: 'Allow'
+            Resource:
+              - !GetAtt NameAndZipBucket.Arn
+              - Fn::Join:
+                 - ''
+                 - - !GetAtt NameAndZipBucket.Arn
+                   - '/*'
+            Principal:
+              AWS: !GetAtt RootRole.Arn
+
+  ExtractAndStore:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Extracts the full name and zip code from a JSON input, and stores it in S3.
+      Handler: extract_and_store.handle
+      Role: !GetAtt RootRole.Arn
+      Runtime: 'python3.8'
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref NameAndZipBucket
+      Code: manifold/
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: Lambda Proxy API
+      Description: HTTP API that passes requests to Lambda
+      ProtocolType: HTTP
+      Target: !GetAtt ExtractAndStore.Arn
