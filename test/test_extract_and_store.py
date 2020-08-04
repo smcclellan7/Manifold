@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import Mock
 from manifold import extract_and_store
+from datetime import datetime
 import json
 import uuid
 
@@ -16,6 +17,13 @@ payload = {
         'name_info': {
             'middle_name': 'Martin'
         }
+    }
+}
+
+event = {
+    'body': json.dumps(payload),
+    'requestContext': {
+        'requestTimeEpoch': int(datetime(1986, 7, 18, 9, 15, 0).timestamp() * 1e3)
     }
 }
 
@@ -58,13 +66,28 @@ class MyTestCase(unittest.TestCase):
         record = extract_and_store.extract(payload)
         self.assertEqual(record, data)
 
+    def test_key(self):
+        key = extract_and_store.key(event)
+        path = key.split('/')
+        self.assertEqual(len(path), 4)
+        self.assertEqual(path[0], 'year=1986')
+        self.assertEqual(path[1], 'month=07')
+        self.assertEqual(path[2], 'day=18')
+
+        parts = path[3].split('.')
+        self.assertEqual(len(parts), 2)
+        try:
+            uuid.UUID(parts[0])
+        except ValueError:
+            self.fail('Invalid uuid {}'.format(parts[0]))
+        self.assertEqual(parts[1], 'json')
+
     def test_handle(self):
         mock_client = Mock()
-        req = {'body': json.dumps(payload)}
-        resp = extract_and_store.handle(req, None, mock_client, 'fake-bucket')
+        resp = extract_and_store.handle(event, None, mock_client, 'fake-bucket')
         self.assertEqual(resp['statusCode'], 200)
-        self.assertEqual(resp['headers']['Content-Type'], 'application/json')
-        self.assertEqual(json.loads(resp['body']), data)
+        self.assertEqual(resp['headers']['Content-Type'], 'text/plain')
+        resp_body = resp['body']
 
         mock_client.put_object.assert_called_once()
         args, kwargs = mock_client.put_object.call_args
@@ -74,13 +97,10 @@ class MyTestCase(unittest.TestCase):
 
         self.assertEqual(json.loads(body.decode("utf-8")), data)
         self.assertEqual(bucket_name, 'fake-bucket')
-        try:
-            uuid.UUID(key)
-        except ValueError:
-            self.fail('Invalid uuid {}'.format(key))
+        self.assertEqual(resp_body, key)
 
     def test_handle_no_data(self):
-        bad_req = {'body': json.dumps({'birthday': '07/18/1986'})}
+        bad_req = {'body': json.dumps({'favorite_color': 'green'})}
         bad_resp = extract_and_store.handle(bad_req, None, None, 'fake-bucket')
         self.assertEqual(bad_resp['statusCode'], 400)
 

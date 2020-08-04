@@ -2,6 +2,7 @@ import boto3
 import json
 import os
 import uuid
+from datetime import datetime
 
 
 def is_complete(record):
@@ -73,6 +74,20 @@ def extract(payload):
     return record
 
 
+def key(event):
+    """Generate an S3 key for a Lambda event using the event date and a random UUID.
+
+    :param event: the incoming request object
+    :type event: dict
+    :return: an S3 key
+    :rtype: str
+    """
+    epoch_time = event['requestContext']['requestTimeEpoch'] / 1e3
+    path = datetime.utcfromtimestamp(epoch_time).strftime('year=%Y/month=%m/day=%d/')
+    unique_id = str(uuid.uuid4())
+    return path + unique_id + '.json'
+
+
 def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('BUCKET_NAME')):
     """Entry-point for the ExtractAndStore Lambda.
 
@@ -85,7 +100,7 @@ def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('
     :param bucket_name: the name of the S3 bucket where the extracted data should be stored
     :type event: dict
     :type bucket_name: str
-    :return: the extracted data, or an error record if the request was bad
+    :return: a response record with the new  S3 key, or an error record if the request was bad
     :rtype: dict
     """
     data = extract(json.loads(event['body']))
@@ -97,9 +112,10 @@ def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('
         }
     j = json.dumps(data)
     b = bytes(j, 'utf-8')
-    s3_client.put_object(Body=b, Bucket=bucket_name, Key=str(uuid.uuid4()))
+    k = key(event)
+    s3_client.put_object(Body=b, Bucket=bucket_name, Key=k)
     return {
         'statusCode': 200,
-        'headers': {'Content-Type': 'application/json'},
-        'body': j
+        'headers': {'Content-Type': 'text/plain'},
+        'body': k
     }
