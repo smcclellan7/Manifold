@@ -3,7 +3,7 @@ Description: A simple service that extracts a full name an zip code from a JSON 
 Resources:
   # TODO consider using more roles with narrower permissions.
   RootRole:
-    Type: 'AWS::IAM::Role'
+    Type: AWS::IAM::Role
     Properties:
       Description: A single role with all permissions.
       Path: /
@@ -15,8 +15,17 @@ Resources:
               Service:
                 - ec2.amazonaws.com
                 - lambda.amazonaws.com
+                - glue.amazonaws.com
             Action:
               - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "*"
+                Resource: "*"
 
   NameAndZipBucket:
     Type: AWS::S3::Bucket
@@ -86,4 +95,24 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt ExtractAndStore.Arn
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/
+
+  NameAndZipAnalytics:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Description: "A Glue database for doing analytics on the data stored in the NameAndZipBucket"
+
+  NameAndZipCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: "NameAndZipCrawler"
+      Role: !GetAtt RootRole.Arn
+      DatabaseName: !Ref NameAndZipAnalytics
+      Targets:
+        S3Targets:
+          - Path: !Ref NameAndZipBucket
+      Schedule:
+        # Run every minute
+        ScheduleExpression: "cron(* * * * ? *)"
