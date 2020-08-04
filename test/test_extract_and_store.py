@@ -23,7 +23,7 @@ payload = {
 event = {
     'body': json.dumps(payload),
     'requestContext': {
-        'requestTimeEpoch': int(datetime(1986, 7, 18, 9, 15, 0).timestamp())
+        'requestTimeEpoch': int(datetime(1986, 7, 18, 9, 15, 0).timestamp() * 1e3)
     }
 }
 
@@ -68,22 +68,26 @@ class MyTestCase(unittest.TestCase):
 
     def test_key(self):
         key = extract_and_store.key(event)
-        splits = key.split('/')
-        self.assertEqual(len(splits), 4)
-        self.assertEqual(splits[0], '1986')
-        self.assertEqual(splits[1], '07')
-        self.assertEqual(splits[2], '18')
+        path = key.split('/')
+        self.assertEqual(len(path), 4)
+        self.assertEqual(path[0], '1986')
+        self.assertEqual(path[1], '07')
+        self.assertEqual(path[2], '18')
+
+        parts = path[3].split('.')
+        self.assertEqual(len(parts), 2)
         try:
-            uuid.UUID(splits[3])
+            uuid.UUID(parts[0])
         except ValueError:
-            self.fail('Invalid uuid {}'.format(splits[3]))
+            self.fail('Invalid uuid {}'.format(parts[0]))
+        self.assertEqual(parts[1], 'json')
 
     def test_handle(self):
         mock_client = Mock()
         resp = extract_and_store.handle(event, None, mock_client, 'fake-bucket')
         self.assertEqual(resp['statusCode'], 200)
-        self.assertEqual(resp['headers']['Content-Type'], 'application/json')
-        self.assertEqual(json.loads(resp['body']), data)
+        self.assertEqual(resp['headers']['Content-Type'], 'text/plain')
+        resp_body = resp['body']
 
         mock_client.put_object.assert_called_once()
         args, kwargs = mock_client.put_object.call_args
@@ -93,16 +97,7 @@ class MyTestCase(unittest.TestCase):
 
         self.assertEqual(json.loads(body.decode("utf-8")), data)
         self.assertEqual(bucket_name, 'fake-bucket')
-
-        splits = key.split('/')
-        self.assertEqual(len(splits), 4)
-        self.assertEqual(splits[0], '1986')
-        self.assertEqual(splits[1], '07')
-        self.assertEqual(splits[2], '18')
-        try:
-            uuid.UUID(splits[3])
-        except ValueError:
-            self.fail('Invalid uuid {}'.format(splits[3]))
+        self.assertEqual(resp_body, key)
 
     def test_handle_no_data(self):
         bad_req = {'body': json.dumps({'favorite_color': 'green'})}
