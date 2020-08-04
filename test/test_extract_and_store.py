@@ -70,9 +70,9 @@ class MyTestCase(unittest.TestCase):
         key = extract_and_store.key(event)
         path = key.split('/')
         self.assertEqual(len(path), 4)
-        self.assertEqual(path[0], '1986')
-        self.assertEqual(path[1], '07')
-        self.assertEqual(path[2], '18')
+        self.assertEqual(path[0], 'year=1986')
+        self.assertEqual(path[1], 'month=07')
+        self.assertEqual(path[2], 'day=18')
 
         parts = path[3].split('.')
         self.assertEqual(len(parts), 2)

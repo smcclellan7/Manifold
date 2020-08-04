@@ -83,9 +83,9 @@ def key(event):
     :rtype: str
     """
     epoch_time = event['requestContext']['requestTimeEpoch'] / 1e3
-    date_prefix = datetime.utcfromtimestamp(epoch_time).strftime('%Y/%m/%d')
+    path = datetime.utcfromtimestamp(epoch_time).strftime('year=%Y/month=%m/day=%d/')
     unique_id = str(uuid.uuid4())
-    return date_prefix + '/' + unique_id + '.json'
+    return path + unique_id + '.json'
 
 
 def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('BUCKET_NAME')):
