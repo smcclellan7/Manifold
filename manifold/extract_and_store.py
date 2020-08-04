@@ -88,10 +88,18 @@ def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('
     :return: the extracted data, or an error record if the request was bad
     :rtype: dict
     """
-    data = extract(event)
+    data = extract(json.loads(event['body']))
     if len(data) == 0:
-        return {'statusCode': 400, 'body': 'Request did not contain any name or zip code fields'}
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'text/plain'},
+            'body': 'Request did not contain any name or zip code fields'
+        }
     j = json.dumps(data)
     b = bytes(j, 'utf-8')
     s3_client.put_object(Body=b, Bucket=bucket_name, Key=str(uuid.uuid4()))
-    return data
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': j
+    }
