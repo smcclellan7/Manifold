@@ -60,8 +60,11 @@ class MyTestCase(unittest.TestCase):
 
     def test_handle(self):
         mock_client = Mock()
-        record = extract_and_store.handle(payload, None, mock_client, 'fake-bucket')
-        self.assertEqual(record, data)
+        req = {'body': json.dumps(payload)}
+        resp = extract_and_store.handle(req, None, mock_client, 'fake-bucket')
+        self.assertEqual(resp['statusCode'], 200)
+        self.assertEqual(resp['headers']['Content-Type'], 'application/json')
+        self.assertEqual(json.loads(resp['body']), data)
 
         mock_client.put_object.assert_called_once()
         args, kwargs = mock_client.put_object.call_args
@@ -75,6 +78,11 @@ class MyTestCase(unittest.TestCase):
             uuid.UUID(key)
         except ValueError:
             self.fail('Invalid uuid {}'.format(key))
+
+    def test_handle_no_data(self):
+        bad_req = {'body': json.dumps({'birthday': '07/18/1986'})}
+        bad_resp = extract_and_store.handle(bad_req, None, None, 'fake-bucket')
+        self.assertEqual(bad_resp['statusCode'], 400)
 
 
 if __name__ == '__main__':
