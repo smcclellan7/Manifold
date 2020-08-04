@@ -21,7 +21,6 @@ Resources:
   NameAndZipBucket:
     Type: AWS::S3::Bucket
 
-  # Grants the root role unrestricted access to the NameAndZipBucket
   NameAndZipBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -29,17 +28,16 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          -
-            Sid: 'AllowS3AccessToRootRole'
+          - Sid: 'AllowS3AccessToRootRole'
             Action:
               - 's3:*'
             Effect: 'Allow'
             Resource:
               - !GetAtt NameAndZipBucket.Arn
               - Fn::Join:
-                 - ''
-                 - - !GetAtt NameAndZipBucket.Arn
-                   - '/*'
+                  - ''
+                  - - !GetAtt NameAndZipBucket.Arn
+                    - '/*'
             Principal:
               AWS: !GetAtt RootRole.Arn
 
@@ -55,10 +53,37 @@ Resources:
           BUCKET_NAME: !Ref NameAndZipBucket
       Code: manifold/
 
-  HttpApi:
-    Type: AWS::ApiGatewayV2::Api
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: Lambda Proxy API
-      Description: HTTP API that passes requests to Lambda
-      ProtocolType: HTTP
-      Target: !GetAtt ExtractAndStore.Arn
+      Name: extract-and-store-api
+      Description: "API gateway for the ExtractAndStore Lambda function."
+
+  ApiGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt ExtractAndStore.Arn
+      ResourceId: !GetAtt ApiGateway.RootResourceId
+      RestApiId: !Ref ApiGateway
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayRootMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+
+  ExtractAndStorePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ExtractAndStore.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/"
