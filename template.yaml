@@ -1,5 +1,45 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: A simple service that extracts a full name an zip code from a JSON and stores it in S3.
+
+Parameters:
+  NameAndZipBucketName:
+    Type: String
+    AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
+    ConstraintDescription: "Bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+    Default: "name-and-zip"
+    Description: "S3 bucket name for storing name and zip code info."
+
+  ExtractAndStoreFunctionName:
+    Type: String
+    MaxLength: 64
+    ConstraintDescription: "Lambda function name maximum length is 64."
+    Default: "extract-and-store"
+    Description: "Lambda function name for extracting and storing name and zip code info."
+
+  ApiGatewayName:
+    Type: String
+    Default: "extract-and-store-api"
+    Description: "REST API name for passing requests to Lambda."
+
+  AnalyticsDatabaseName:
+    Type: String
+    AllowedPattern: ^[0-9a-z]+([0-9a-z-]*[0-9a-z])*$
+    ConstraintDescription: "Glue database name can include numbers, lowercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+    Default: "name-and-zip-analytics"
+    Description: "Glue database name for analyzing name and zip code info."
+
+  AnalyticsCrawlerName:
+    Type: String
+    Default: "name-and-zip-crawler"
+    Description: "Glue Crawler name for pulling name and zip info into the analytics database."
+
+  AnalyticsTableNamePrefix:
+    Type: String
+    AllowedPattern: ^[0-9a-z]+([0-9a-z-]*[0-9a-z])*$
+    ConstraintDescription: "Glue table name prefix can include numbers, lowercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+    Default: "name-and-zip"
+    Description: "Prefix for Glue tables created by the analytics crawler."
+
 Resources:
   # IAM Roles
 
@@ -33,6 +73,8 @@ Resources:
 
   NameAndZipBucket:
     Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref NameAndZipBucketName
 
   NameAndZipBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -60,6 +102,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Description: Extracts the full name and zip code from a JSON input, and stores it in S3.
+      FunctionName: !Ref ExtractAndStoreFunctionName
       Handler: extract_and_store.handle
       Role: !GetAtt RootRole.Arn
       Runtime: 'python3.8'
@@ -67,7 +110,6 @@ Resources:
         Variables:
           BUCKET_NAME: !Ref NameAndZipBucket
       Code: manifold/
-
 
   ExtractAndStorePermission:
     Type: AWS::Lambda::Permission
@@ -82,7 +124,7 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: extract-and-store-api
+      Name: !Ref ApiGatewayName
       Description: "API gateway for the ExtractAndStore Lambda function."
 
   ApiGatewayRootMethod:
@@ -113,16 +155,16 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: name-and-zip-analytics
+        Name: !Ref AnalyticsDatabaseName
         Description: "A Glue database for doing analytics on the data stored in the NameAndZipBucket"
 
   NameAndZipCrawler:
     Type: AWS::Glue::Crawler
     Properties:
-      Name: NameAndZipCrawler
+      Name: !Ref AnalyticsCrawlerName
       Role: !GetAtt RootRole.Arn
       DatabaseName: !Ref NameAndZipAnalyticsDatabase
-      TablePrefix: name-and-zip
+      TablePrefix: !Ref AnalyticsTableNamePrefix
       Targets:
         S3Targets:
           - Path: !Ref NameAndZipBucket
@@ -131,5 +173,4 @@ Resources:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: LOG
       Schedule:
-        # Run every 15 minutes
-        ScheduleExpression: "cron(0/15 * * * ? *)"
+        ScheduleExpression: cron(0/15 * * * ? *)
