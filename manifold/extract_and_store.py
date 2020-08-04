@@ -2,6 +2,7 @@ import boto3
 import json
 import os
 import uuid
+from datetime import datetime
 
 
 def is_complete(record):
@@ -73,6 +74,13 @@ def extract(payload):
     return record
 
 
+def key(event):
+    epoch_time = event['requestContext']['requestTimeEpoch']
+    date_prefix = datetime.utcfromtimestamp(epoch_time).strftime('%Y/%m/%d')
+    unique_id = str(uuid.uuid4())
+    return date_prefix + '/' + unique_id
+
+
 def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('BUCKET_NAME')):
     """Entry-point for the ExtractAndStore Lambda.
 
@@ -97,7 +105,7 @@ def handle(event, context, s3_client=boto3.client('s3'), bucket_name=os.getenv('
         }
     j = json.dumps(data)
     b = bytes(j, 'utf-8')
-    s3_client.put_object(Body=b, Bucket=bucket_name, Key=str(uuid.uuid4()))
+    s3_client.put_object(Body=b, Bucket=bucket_name, Key=key(event))
     return {
         'statusCode': 200,
         'headers': {'Content-Type': 'application/json'},
