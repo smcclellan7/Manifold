@@ -147,6 +147,7 @@ Resources:
       - ApiGatewayRootMethod
     Properties:
       RestApiId: !Ref ApiGateway
+      StageName: Prod
 
   # Glue Analytics
 
