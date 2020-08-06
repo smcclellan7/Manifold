@@ -3,10 +3,11 @@ A simple web service that extracts full name and zip code information from a JSO
 The service can be launched using [AWS Cloudformation](https://aws.amazon.com/cloudformation/).
 
 ## Overview
-The service consists of three components
+The service consists of four components
 - **NameAndZipBucket** - an [S3](https://aws.amazon.com/s3/) bucket for storing the extracted info.
 - **ExtractAndStore** - a [Lambda](https://aws.amazon.com/lambda/) function that does the work of extracting the info and storing it in the NameAndZipBucket.
 - **ApiGateway** - an [API Gateway](https://aws.amazon.com/api-gateway/) that exposes the service to the web. All requests to the API are passed directly to the ExtractAndStore function.
+- **NameAndZipAnalyticsDatabase** - a [Glue](https://aws.amazon.com/glue/) that contains data scraped from the NameAndZipBucket, which can be analyzed using [Athena](https://aws.amazon.com/athena/).
 
 ## NameAndZipBucket
 The NameAndZipBucket stores the extracted info as a JSON string. E.g.
@@ -26,7 +27,10 @@ ExtractAndStore runs a Python function to find fields named `first_name`, `middl
 ## ApiGateway
 The ApiGateway is a simple REST API that passes any incoming POST request to the ExtractAndStore function.
 
-## Deployment
+## NameAndZipAnalyticsDatabase
+The NameAndZipAnalyticsDataase is populated by the NameAndZipCrawler, which runs every 15 minutes and extracts data from the NameAndZipBucket. It will build a single table that contains columns for each of the extracted fields (`first_name`, `middle_name`, `last_name`, and `zip_code`) and each partition (`year`, `month`, and `day`, based on the date the record was received by the ApiGateway). This table can be queried with SQL via [Athena](https://aws.amazon.com/athena/).
+
+# Deployment
 The service can be deployed to AWS with the [AWS Command Line Interface](https://docs.aws.amazon.com/cli/) using the following steps:
 1. If this is your first time using AWS CLI:
     1. Install the AWS CLI v2 for your operating system: https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html
@@ -36,4 +40,4 @@ The service can be deployed to AWS with the [AWS Command Line Interface](https:/
 1. Clone this repository to your computer: `git clone https://github.com/smcclellan7/Manifold.git`
 1. From the root directory of the cloned repo, create a packaged template: `aws cloudformation package --template template.yaml --s3-bucket {bucket-name} --output-template-file packaged-template.yaml`
 1. Deploy the packaged template: `aws cloudformation deploy --template-file packaged-template.yaml --stack-name name-and-zip --capabilities CAPABILITY_IAM`
-1. Once the deployment is complete, the API endpoint will be available at https://{API-gateway-id}.execute-api.{region}.amazonaws.com/Prod. You can also find this link in your AWS Console: https://console.aws.amazon.com/apigateway/
+1. Once the deployment is complete, the API endpoint will be available at `https://{API-gateway-id}.execute-api.{region}.amazonaws.com/Prod`. You can also find this link in your AWS Console: https://console.aws.amazon.com/apigateway/
